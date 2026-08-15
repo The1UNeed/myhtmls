@@ -15,8 +15,11 @@ export const publicUploadAuth = {
   account_name: "Public Uploads"
 };
 
+// No requireEnv here: constructing a Pool never dials the database, and a
+// missing DATABASE_URL must not crash module load (it would take down the
+// homepage and every DB-free route). Queries fail with a clear error instead.
 export const pool = new Pool({
-  connectionString: requireEnv("DATABASE_URL", config.databaseUrl)
+  connectionString: config.databaseUrl
 });
 
 export async function initDb() {
