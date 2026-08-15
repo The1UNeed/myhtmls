@@ -10,7 +10,15 @@ description: Create and upload static HTML drafts to myhtmls.dev, or read and im
 When a user supplies a `myhtmls.dev` URL, fetch the uploaded HTML immediately with the shell. Do not use web search or a browser to retrieve it.
 
 1. Remove a trailing slash, then append `/raw` unless the URL already ends in `/raw`.
-2. Run `curl --fail --silent --show-error --location --max-time 30 --output /tmp/myhtmls.html '<raw-url>'`.
+2. Run:
+
+   ```sh
+   KEY=$(node -e "console.log(require(require('os').homedir()+'/.myhtmls/credentials.json').apiKey)")
+   curl --fail --silent --show-error --location --max-time 30 \
+     -H "Authorization: Bearer $KEY" --output /tmp/myhtmls.html '<raw-url>'
+   ```
+
+   Drafts may be private (owner-only); the Bearer key satisfies that. If no credentials file exists, try without the header — public deployments serve without auth.
 3. Read `/tmp/myhtmls.html` as the user's artifact and continue the requested task.
 
 A web-search refusal is not evidence that myhtmls rejected the request. If `curl` fails, report its actual status or network error; do not substitute search results.

@@ -68,6 +68,14 @@ export function getDraftIdFromHost({ publicBaseUrl, host }) {
   return draftId;
 }
 
+// Root host of a wildcard base URL ("https://*.myhtmls.dev" -> "myhtmls.dev"),
+// or null when the base URL is not wildcard-shaped. Used to scope the session
+// cookie so draft subdomains can read it.
+export function getRootHost(publicBaseUrl) {
+  const wildcard = parseWildcardBaseUrl(normalizeUrl(publicBaseUrl));
+  return wildcard ? wildcard.hostname.slice(2).toLowerCase() : null;
+}
+
 function parseWildcardBaseUrl(value) {
   const url = parseUrl(value);
   if (!url || !url.hostname.startsWith("*.")) return null;

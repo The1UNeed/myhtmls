@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>myhtmls: build summary (2026-08-15)</title>
+<style>
+  body { margin: 0; background: #000; color: #fff; font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 36px 0 10px; border-bottom: 1px solid #333; padding-bottom: 6px; }
+  h3 { font-size: 16px; margin: 20px 0 6px; }
+  p, li { color: #ddd; }
+  .sub { color: #999; margin: 0 0 24px; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+  code { background: #1a1a1a; padding: 1px 5px; border-radius: 4px; color: #fff; }
+  pre { background: #111; border: 1px solid #2a2a2a; border-radius: 6px; padding: 12px 14px; overflow-x: auto; color: #eee; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+  th, td { text-align: left; padding: 6px 10px; border: 1px solid #2e2e2e; vertical-align: top; }
+  th { background: #161616; color: #fff; }
+  td { color: #ddd; }
+  a { color: #8ab4ff; }
+  .ok { color: #7ee787; }
+  .warn { color: #ffb86b; }
+  ul { padding-left: 22px; margin: 8px 0; }
+  .kv td:first-child { color: #999; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+<h1>myhtmls</h1>
+<p class="sub">Build summary, 2026-08-15. Authenticated static HTML draft publishing for agents at
+<a href="https://myhtmls.dev" target="_blank" rel="noopener noreferrer">myhtmls.dev</a>.
+A fork of <a href="https://www.npmjs.com/package/postplan" target="_blank" rel="noopener noreferrer">postplan 0.0.4</a> (MIT, t3dotgg) ported from Railway to Vercel.
+Source: <a href="https://github.com/The1UNeed/myhtmls" target="_blank" rel="noopener noreferrer">github.com/The1UNeed/myhtmls</a> ·
+Package: <a href="https://www.npmjs.com/package/myhtmls" target="_blank" rel="noopener noreferrer">npm: myhtmls@0.1.0</a></p>
+
+<h2>Why</h2>
+<p>The previous workflow published every HTML artifact as a separate Vercel preview deployment with SSO
+protection enabled. Three failures: agents could not <code>curl</code> their own artifacts back (the login
+page came back instead), every document produced a new deployment with a new URL so revisions broke links,
+and the promised <code>&lt;draft-id&gt;.myhtmls.dev</code> URLs did not exist. myhtmls replaces this with one
+long-lived service: stable per-draft URLs, version history, and byte-for-byte serving to every client.</p>
+
+<h2>Architecture</h2>
+<table>
+<tr><th>Layer</th><th>Upstream postplan</th><th>myhtmls</th></tr>
+<tr><td>Compute</td><td>Express on Railway, long-lived process</td><td>Same Express app as one Vercel Function behind a catch-all rewrite</td></tr>
+<tr><td>Database</td><td>Postgres via <code>pg</code> (TCP)</td><td>Neon serverless Postgres via <code>@neondatabase/serverless</code> (WebSocket); schema unchanged</td></tr>
+<tr><td>HTML storage</td><td>S3 via AWS SDK, key stored in <code>object_key</code></td><td>Vercel Blob; <code>object_key</code> stores the blob URL, reads are one server-side fetch; blob host never exposed</td></tr>
+<tr><td>Schema setup</td><td>DDL on every boot</td><td>One-shot <code>npm run migrate</code>; cold starts do no DDL</td></tr>
+<tr><td>Client IP / request id</td><td>Railway headers</td><td><code>x-vercel-forwarded-for</code> / <code>x-vercel-id</code></td></tr>
+<tr><td>Sign-in</td><td>shoo.dev broker, dashboard, CLI key minting</td><td>Unchanged</td></tr>
+<tr><td>Deploys</td><td>Railway</td><td>Git-connected: push to GitHub, Vercel builds server-side</td></tr>
+</table>
+
+<h2>Deliberate deviations from upstream</h2>
+<ul>
+<li><strong>Uploads require an API key.</strong> Upstream accepts anonymous uploads. On a personal budget with a
+per-instance rate limiter, that is an open quota drain. <code>MYHTMLS_ALLOW_ANONYMOUS_UPLOADS=1</code> restores
+upstream behavior.</li>
+<li><strong>Inline scripts run, sandboxed, with a per-version CSP.</strong> Upstream serves
+<code>script-src 'none'</code>. myhtmls serves a CSP <code>sandbox</code> without <code>allow-same-origin</code>:
+scripts execute with an opaque origin, so storage throws and fetch, forms, frames, and cookies are dead.
+Versions containing inline script additionally lose network images and fonts (<code>img-src data:</code>) and
+popups, because an independent review found that <code>img-src https:</code> plus scripts allowed silent
+exfiltration of viewer input via image beacons. Scripts and arbitrary-host images are never available together.</li>
+<li><strong>No search indexing.</strong> Drafts send <code>X-Robots-Tag: noindex, nofollow</code>; the apex serves a
+disallow-all robots.txt. Reads are gated only by the unguessable 12-char draft id.</li>
+<li><strong>Thin CLI install.</strong> Server packages live in devDependencies, so <code>npx myhtmls</code> installs
+about 2 MB (commander + parse5) instead of about 40 MB. Vercel installs devDependencies at build time.</li>
+</ul>
+
+<h2>What broke along the way, and the fixes</h2>
+<table>
+<tr><th>Symptom</th><th>Actual cause</th><th>Fix</th></tr>
+<tr><td>Every deploy stuck, CLI said "fetch failed"</td><td>Two stacked problems: CLI file uploads never complete from this network, and Vercel Pro seat enforcement (<code>COMMIT_AUTHOR_REQUIRED</code>) blocked all deployments because commits were authored under a machine-local email no GitHub user owns. The block is invisible in the CLI; only the API field <code>readyStateReason</code> names it.</td><td>Git-connected deploys (nothing uploads from the machine) and commit identity set to the GitHub noreply address</td></tr>
+<tr><td>Every route 500 after first successful deploy</td><td>Module-load crash: upstream requires <code>DATABASE_URL</code> at import time, and Neon was not connected yet</td><td>Pool construction no longer throws on a missing env var; DB-free routes stay up</td></tr>
+<tr><td>npm publish would have shipped a broken CLI</td><td>npm 11 silently drops <code>bin</code> entries whose path starts with <code>./</code></td><td><code>npm pkg fix</code> before publish; caught because the first 2FA-blocked publish printed the auto-correct warning</td></tr>
+<tr><td>Publish rejected with 403</td><td>npm now requires 2FA on the account for publishing</td><td>2FA enabled, published interactively</td></tr>
+</table>
+
+<h2>Independent review</h2>
+<p>A gpt-5.6-sol (Codex) review of the fork delta against pristine upstream produced three findings:
+the image-beacon exfiltration channel <span class="ok">(confirmed, fixed with the per-version CSP above)</span>,
+a Node 20 incompatibility in the Neon driver <span class="ok">(confirmed, engines raised to 22)</span>,
+and server deps in devDependencies <span class="warn">(valid concern, kept as a documented trade-off)</span>.
+It found no auth bypass, no SSRF path through the stored blob URLs, and no way to write an arbitrary
+<code>object_key</code>.</p>
+
+<h2>Verification, all against production</h2>
+<ul>
+<li class="ok">Byte-for-byte serving: <code>diff</code> of curl output vs the source file is empty on all four URL forms (subdomain, subdomain /raw, apex /d/&lt;id&gt;/raw, pinned /v/1/raw)</li>
+<li class="ok">Versioning: re-upload of the same file updated the same draft to v2; v1 bytes unchanged; git repo auto-linked in <code>myhtmls list</code></li>
+<li class="ok">Auth: uploads without a key get 401; server-side HTML policy rejects what the CLI rejects when the CLI is bypassed</li>
+<li class="ok">Sandbox, tested in a real browser: inline script executed; localStorage, cookies, and fetch all threw</li>
+<li class="ok">Per-version CSP live: scripted draft gets <code>img-src data:</code>, script-free draft keeps <code>img-src https:</code></li>
+<li class="ok">Delete: draft removed via API, subsequent fetch 404</li>
+<li class="ok">Registry package: <code>npm exec myhtmls@0.1.0</code> runs the CLI with the bin entry intact</li>
+</ul>
+
+<h2>Usage</h2>
+<pre><code>npx myhtmls upload ./plan.html          # returns https://&lt;draft-id&gt;.myhtmls.dev
+npx myhtmls upload ./plan.html --new    # force a fresh draft
+npx myhtmls list                        # drafts with repo, versions, timestamps
+npx myhtmls auth login                  # mint a key in the browser, paste back
+curl https://&lt;draft-id&gt;.myhtmls.dev/raw # exact uploaded bytes, any client</code></pre>
+
+<h2>Operational facts</h2>
+<table class="kv">
+<tr><td>Domains</td><td>myhtmls.dev (apex), www (308 to apex), *.myhtmls.dev wildcard, all verified</td></tr>
+<tr><td>Deploy path</td><td>git push to main only; never <code>vercel deploy</code> from this machine</td></tr>
+<tr><td>Commit identity</td><td>must map to a GitHub team member or Vercel blocks the deployment</td></tr>
+<tr><td>Vercel SSO</td><td>still protects *.vercel.app URLs; custom domains serve publicly</td></tr>
+<tr><td>Agent skills</td><td>html-communication publishes via <code>npx myhtmls upload</code>; a read+upload skill ships inside the npm package</td></tr>
+<tr><td>Size limit</td><td>512 KB per document, enforced client- and server-side</td></tr>
+</table>
+</main>
+</body>
+</html>

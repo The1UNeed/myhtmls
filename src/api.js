@@ -10,6 +10,7 @@ import { validateHtml } from "./html-policy.js";
 import { clientIp } from "./client-ip.js";
 import { listAccountDrafts } from "./drafts.js";
 import { registerWebRoutes } from "./web.js";
+import { readSession } from "./web-auth.js";
 import {
   getDraftIdFromHost,
   getDraftPublicUrl,
@@ -456,6 +457,16 @@ async function renderDraft(req, res, { draftId, versionNumber }) {
     return res.status(404).type("html").send(renderNotFound());
   }
 
+  // Owner-only reads (MYHTMLS_PRIVATE_READS=1): the viewer must present a
+  // Bearer key or web session belonging to the draft's account. Browsers are
+  // bounced through sign-in and returned here; everything else gets 401.
+  if (config.privateReads) {
+    const viewerAccountId = await resolveViewerAccount(req);
+    if (!viewerAccountId || viewerAccountId !== draft.account_id) {
+      return denyPrivateDraft(req, res);
+    }
+  }
+
   const html = await getHtmlObject(version.object_key);
   // Rows from before content signals existed have has_inline_script = null;
   // treat unknown as scripted so they get the stricter policy.
@@ -558,6 +569,28 @@ async function findOwnedDraft(client, draftId, accountId) {
     [draftId, accountId]
   );
   return result.rows[0] || null;
+}
+
+async function resolveViewerAccount(req) {
+  const apiKey = await optionalAuth(req);
+  if (apiKey) return apiKey.account_id;
+  return readSession(req)?.accountId || null;
+}
+
+function denyPrivateDraft(req, res) {
+  // curl and agent fetchers send Accept: */* — only an explicit text/html
+  // (a real browser navigation) earns the sign-in redirect.
+  const wantsHtml = (req.get("accept") || "").includes("text/html");
+  if (wantsHtml && config.sessionSecret && config.publicBaseUrl) {
+    const returnTo = `https://${req.get("host")}${req.originalUrl}`;
+    return res.redirect(
+      `${getHomeUrlForRequest(req)}/auth/sign-in?next=${encodeURIComponent(returnTo)}`
+    );
+  }
+  res.status(401).json({
+    ok: false,
+    error: "This draft is private. Send an Authorization: Bearer API key or sign in."
+  });
 }
 
 async function requireAuth(req, res, next) {

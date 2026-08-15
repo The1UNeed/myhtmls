@@ -5,7 +5,7 @@ import { clientIp } from "./client-ip.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { randomToken, sha256 } from "./crypto.js";
 import { getAccountDraftWithVersions, listAccountDrafts } from "./drafts.js";
-import { getDraftIdFromHost, getHomeUrl, getRequestBaseUrl } from "./public-url.js";
+import { getDraftIdFromHost, getHomeUrl, getRequestBaseUrl, getRootHost } from "./public-url.js";
 import { buildAuthorizeUrl, buildPkce, exchangeCode, verifyIdToken } from "./shoo.js";
 import {
   clearAuthStateCookie,
@@ -276,12 +276,28 @@ function claimText(value) {
   return trimmed || null;
 }
 
-// Only allow same-site relative paths as post-login destinations, so the
-// `next` param can never become an open redirect.
+// Post-login destinations may be same-site relative paths, or — for private
+// draft reads — absolute https URLs on the apex or a draft subdomain of the
+// configured root host. Anything else falls back to /dashboard, so the `next`
+// param can never become an open redirect.
 function safeNextPath(value) {
-  if (typeof value !== "string") return "/dashboard";
-  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+  if (typeof value !== "string" || !value) return "/dashboard";
+  if (value.startsWith("/") && !value.startsWith("//") && !value.includes("\\")) {
+    return value;
+  }
+
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
     return "/dashboard";
   }
-  return value;
+  const rootHost = getRootHost(config.publicBaseUrl);
+  if (url.protocol !== "https:" || !rootHost) return "/dashboard";
+  const host = url.hostname.toLowerCase();
+  const isDraftHost = Boolean(
+    getDraftIdFromHost({ publicBaseUrl: config.publicBaseUrl, host })
+  );
+  if (host !== rootHost && !isDraftHost) return "/dashboard";
+  return url.toString();
 }

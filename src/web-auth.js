@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "./config.js";
+import { getRootHost } from "./public-url.js";
 
 export const SESSION_COOKIE = "myhtmls_session";
 export const AUTH_STATE_COOKIE = "myhtmls_auth_state";
@@ -39,11 +40,21 @@ export function createSessionCookie({ accountId, accountName, email, pictureUrl 
     requireSecret(),
     SESSION_TTL_SECONDS
   );
-  return serializeCookie(SESSION_COOKIE, token, { maxAge: SESSION_TTL_SECONDS });
+  return serializeCookie(SESSION_COOKIE, token, {
+    maxAge: SESSION_TTL_SECONDS,
+    domain: sessionCookieDomain()
+  });
 }
 
 export function clearSessionCookie() {
-  return serializeCookie(SESSION_COOKIE, "", { maxAge: 0 });
+  return serializeCookie(SESSION_COOKIE, "", { maxAge: 0, domain: sessionCookieDomain() });
+}
+
+// With a wildcard base URL the session must be readable on draft subdomains
+// (private reads authenticate there), so the cookie is domain-scoped to the
+// root host. The auth-state cookie stays host-only: sign-in is apex-only.
+function sessionCookieDomain() {
+  return getRootHost(config.publicBaseUrl);
 }
 
 export function createAuthStateCookie(payload) {
@@ -87,7 +98,7 @@ export function readCookie(req, name) {
   return null;
 }
 
-function serializeCookie(name, value, { maxAge }) {
+function serializeCookie(name, value, { maxAge, domain }) {
   const attributes = [
     `${name}=${encodeURIComponent(value)}`,
     "Path=/",
@@ -95,6 +106,7 @@ function serializeCookie(name, value, { maxAge }) {
     "SameSite=Lax",
     `Max-Age=${maxAge}`
   ];
+  if (domain) attributes.push(`Domain=${domain}`);
   if (process.env.NODE_ENV !== "development") attributes.push("Secure");
   return attributes.join("; ");
 }

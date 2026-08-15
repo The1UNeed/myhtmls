@@ -9,6 +9,10 @@ export const config = {
   // budget, and the per-instance in-memory rate limiter is a much weaker
   // backstop on serverless than on a single long-lived Railway process.
   allowAnonymousUploads: process.env.MYHTMLS_ALLOW_ANONYMOUS_UPLOADS === "1",
+  // When set, draft reads are owner-only: a Bearer API key or web session
+  // whose account owns the draft. Off by default to match upstream's
+  // anyone-with-the-link model.
+  privateReads: process.env.MYHTMLS_PRIVATE_READS === "1",
   // Web sign-in (dashboard). Absent MYHTMLS_SESSION_SECRET, all web-auth
   // routes respond 503 and the API/serving paths are unaffected.
   sessionSecret: process.env.MYHTMLS_SESSION_SECRET,
