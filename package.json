@@ -1,0 +1,40 @@
+{
+  "name": "myhtmls",
+  "version": "0.1.0",
+  "description": "Static HTML draft publishing for agents, at myhtmls.dev. A fork of postplan ported to Vercel.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/the1uneed/myhtmls"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "skills/",
+    "README.md"
+  ],
+  "bin": {
+    "myhtmls": "./bin/myhtmls.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node scripts/migrate.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "parse5": "^7.3.0"
+  },
+  "devDependencies": {
+    "@neondatabase/serverless": "^1.0.1",
+    "@vercel/blob": "^2.8.0",
+    "express": "^5.1.0",
+    "jose": "^6.2.3",
+    "nanoid": "^5.1.5"
+  }
+}
