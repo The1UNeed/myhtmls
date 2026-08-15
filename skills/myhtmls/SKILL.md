@@ -67,6 +67,12 @@ npx myhtmls upload <file path> --new
 
 Uploads require an API key (`myhtmls auth set <key>` once, stored in `~/.myhtmls`).
 
+To make a draft readable without sign-in (when the server has private reads on):
+
+```sh
+npx myhtmls visibility <file-or-draft-id> --public
+```
+
 ## Viewer Behavior
 
 Every myhtmls URL serves the exact uploaded HTML, byte for byte, to every client — browsers, curl, and agent fetch tools alike. There is no wrapper page or consent step: fetching a myhtmls URL always yields the draft content itself. The `/raw` suffix is an alias that returns the same bytes.

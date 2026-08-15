@@ -36,6 +36,13 @@ List the drafts published to your account:
 npx myhtmls list
 ```
 
+When `MYHTMLS_PRIVATE_READS=1`, drafts are owner-only unless you mark one public:
+
+```sh
+npx myhtmls visibility ./plan.html --public
+npx myhtmls visibility edsq5btu4d76 --private
+```
+
 The CLI stores credentials and draft mappings in `~/.myhtmls`.
 
 ## Differences from postplan
@@ -60,7 +67,7 @@ Optional:
 - `MYHTMLS_SESSION_SECRET` — together with `MYHTMLS_PUBLIC_BASE_URL`, enables web sign-in (the dashboard and `/cli/auth`). If either is absent, those routes return 503 and uploads/serving are unaffected.
 - `SHOO_BASE_URL` — identity broker for web sign-in (default `https://shoo.dev`).
 - `MYHTMLS_ALLOW_ANONYMOUS_UPLOADS` — `1` restores upstream postplan's anonymous uploads.
-- `MYHTMLS_PRIVATE_READS` — `1` makes draft reads owner-only: viewers must present a Bearer API key or a web session belonging to the draft's account. Browsers are redirected through sign-in and back; other clients get 401. Off by default (upstream's anyone-with-the-link model).
+- `MYHTMLS_PRIVATE_READS` — `1` makes draft reads owner-only unless the owner marks that draft public (`is_public`): viewers must present a Bearer API key or a web session belonging to the draft's account. Browsers are redirected through sign-in and back; other clients get 401. Off by default (upstream's anyone-with-the-link model). Public drafts still carry `X-Robots-Tag: noindex, nofollow`.
 - `MAX_HTML_BYTES`, `UPLOAD_IP_RATE_LIMIT_WINDOW_MS`, `UPLOAD_IP_RATE_LIMIT_MAX`, `UPLOAD_RATE_LIMIT_WINDOW_MS`, `UPLOAD_RATE_LIMIT_MAX`
 
 ## Serving

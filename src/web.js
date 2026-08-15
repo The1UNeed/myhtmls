@@ -161,6 +161,30 @@ export function registerWebRoutes(app) {
     }
   });
 
+  app.post("/dashboard/drafts/:draftId/visibility/:state", ...web, async (req, res, next) => {
+    try {
+      const session = readSession(req);
+      if (!session) {
+        return res.type("html").send(renderSignIn({ next: "/dashboard" }));
+      }
+      const isPublic = req.params.state === "public";
+      if (req.params.state !== "public" && req.params.state !== "private") {
+        return next();
+      }
+      await pool.query(
+        `
+          UPDATE drafts
+          SET is_public = $3, updated_at = now()
+          WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
+        `,
+        [req.params.draftId, session.accountId, isPublic]
+      );
+      res.redirect(`/dashboard/drafts/${encodeURIComponent(req.params.draftId)}`);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get("/cli/auth", ...web, async (req, res, next) => {
     try {
       const session = readSession(req);

@@ -18,6 +18,7 @@ export async function listAccountDrafts(accountId, { requestBaseUrl }) {
         d.created_at,
         d.updated_at,
         d.disabled_at,
+        d.is_public,
         cv.version_number AS latest_version_number,
         cv.created_at AS latest_version_at,
         COALESCE(vc.version_count, 0) AS version_count
@@ -49,6 +50,7 @@ export async function listAccountDrafts(accountId, { requestBaseUrl }) {
     updatedAt: row.updated_at,
     latestVersionAt: row.latest_version_at,
     disabled: Boolean(row.disabled_at),
+    isPublic: Boolean(row.is_public),
     publicUrl: getDraftPublicUrl({
       draftId: row.id,
       publicBaseUrl: config.publicBaseUrl,
@@ -91,6 +93,7 @@ export async function getAccountDraftWithVersions(accountId, draftId, { requestB
       draftId: draft.id,
       title: draft.title,
       description: draft.description,
+      isPublic: Boolean(draft.is_public),
       publicUrl: getDraftPublicUrl({
         draftId: draft.id,
         publicBaseUrl: config.publicBaseUrl,

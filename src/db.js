@@ -54,7 +54,8 @@ export async function initDb() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       deleted_at TIMESTAMPTZ,
       disabled_at TIMESTAMPTZ,
-      disabled_reason TEXT
+      disabled_reason TEXT,
+      is_public BOOLEAN NOT NULL DEFAULT false
     );
 
     CREATE TABLE IF NOT EXISTS draft_versions (
@@ -121,6 +122,7 @@ export async function initDb() {
     ALTER TABLE identities ADD COLUMN IF NOT EXISTS pii_subject TEXT;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS description TEXT;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS repo_host TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE draft_versions ADD COLUMN IF NOT EXISTS git_commit_subject TEXT;
     ALTER TABLE draft_versions ADD COLUMN IF NOT EXISTS git_dirty BOOLEAN;
     ALTER TABLE draft_versions ADD COLUMN IF NOT EXISTS request_id TEXT;

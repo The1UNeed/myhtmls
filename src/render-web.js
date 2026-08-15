@@ -85,6 +85,16 @@ export function renderDraftDetail({ session, draft, versions }) {
         <p class="small"><a href="/dashboard">← My drafts</a></p>
         <h1>${escapeHtml(draft.title)}</h1>
         ${draft.description ? `<p class="muted">${escapeHtml(draft.description)}</p>` : ""}
+        <p>
+          ${
+            draft.isPublic
+              ? '<span class="pill">public</span> Anyone with the link can read this draft.'
+              : '<span class="pill warn">private</span> Owner-only while private reads are on.'
+          }
+        </p>
+        <form method="post" action="/dashboard/drafts/${escapeHtml(draft.draftId)}/visibility/${draft.isPublic ? "private" : "public"}">
+          <button class="button" type="submit">${draft.isPublic ? "Make private" : "Make public"}</button>
+        </form>
         <p><a href="${escapeHtml(draft.publicUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(draft.publicUrl)}</a></p>
         <table>
           <tr><th>Version</th><th>Commit</th><th>Ref</th><th>Published</th></tr>
@@ -170,6 +180,7 @@ function renderDraftRow(draft) {
       <div>
         <a class="row-title" href="${escapeHtml(draft.publicUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(draft.title)}</a>
         ${draft.disabled ? '<span class="pill warn">disabled</span>' : ""}
+        ${draft.isPublic ? '<span class="pill">public</span>' : ""}
         ${draft.description ? `<div class="muted small">${escapeHtml(draft.description)}</div>` : ""}
       </div>
       <div class="row-meta muted small">

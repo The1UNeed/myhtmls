@@ -211,15 +211,54 @@ program
       const version = draft.latestVersionNumber ? `v${draft.latestVersionNumber}` : "no versions";
       const count = `${draft.versionCount} version${draft.versionCount === 1 ? "" : "s"}`;
       const disabled = draft.disabled ? " · disabled" : "";
+      const visibility = draft.isPublic ? " · public" : " · private";
 
       console.log(draft.title || "Untitled Draft");
-      console.log(`  ${repo} · ${version} · ${count} · updated ${timeAgo(draft.updatedAt)}${disabled}`);
+      console.log(`  ${repo} · ${version} · ${count} · updated ${timeAgo(draft.updatedAt)}${visibility}${disabled}`);
       console.log(`  ${draft.publicUrl}`);
       if (draft.description) {
         console.log(`  ${draft.description}`);
       }
       console.log("");
     }
+  });
+
+program
+  .command("visibility")
+  .description("Make a draft public (anyone with the link) or private (owner-only).")
+  .argument("[draft-or-file]", "Draft id or a local HTML file previously uploaded")
+  .option("--public", "Anyone with the link can read")
+  .option("--private", "Owner-only when private reads are enabled")
+  .option("--draft <draft-id>", "Draft id (overrides the argument)")
+  .option("--api-url <url>", "Override the default myhtmls API base URL")
+  .action(async (draftOrFile, options) => {
+    if (Boolean(options.public) === Boolean(options.private)) {
+      throw new CliError("Pass exactly one of --public or --private.");
+    }
+
+    const { apiUrl, apiKey } = readAuth(options.apiUrl);
+    const draftId = resolveDraftId(options.draft || draftOrFile);
+    if (!draftId) {
+      throw new CliError("Need a draft id or a local file that has already been uploaded.");
+    }
+
+    const response = await fetch(`${apiUrl}/api/drafts/${encodeURIComponent(draftId)}/visibility`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "User-Agent": `myhtmls/${VERSION}`
+      },
+      body: JSON.stringify({ public: Boolean(options.public) })
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      throw new CliError(body.error || "Failed to update visibility.");
+    }
+
+    console.log(body.public ? "Draft is public" : "Draft is private");
+    console.log(`URL: ${body.publicUrl}`);
+    console.log(`Draft ID: ${body.draftId}`);
   });
 
 program.exitOverride();
@@ -237,6 +276,15 @@ program.parseAsync(process.argv).catch((error) => {
   console.error(error.message || error);
   process.exit(1);
 });
+
+function resolveDraftId(value) {
+  if (!value) return null;
+  const drafts = readDrafts();
+  const resolved = path.resolve(value);
+  if (drafts.files?.[resolved]?.draftId) return drafts.files[resolved].draftId;
+  if (drafts.files?.[value]?.draftId) return drafts.files[value].draftId;
+  return value;
+}
 
 function readAuth(apiUrlOverride, { requireApiKey = true } = {}) {
   const config = readJson(CONFIG_PATH, {});

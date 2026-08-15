@@ -339,6 +339,48 @@ export function createApp() {
     }
   });
 
+  app.post("/api/drafts/:draftId/visibility", requireAuth, async (req, res, next) => {
+    try {
+      const isPublic = parsePublicFlag(req.body?.public);
+      if (isPublic === null) {
+        return res.status(400).json({
+          ok: false,
+          error: "Send { \"public\": true } or { \"public\": false }."
+        });
+      }
+
+      const result = await pool.query(
+        `
+          UPDATE drafts
+          SET is_public = $3, updated_at = now()
+          WHERE id = $1
+            AND account_id = $2
+            AND deleted_at IS NULL
+          RETURNING id, is_public
+        `,
+        [req.params.draftId, req.auth.account_id, isPublic]
+      );
+
+      if (!result.rowCount) {
+        return res.status(404).json({ ok: false, error: "Draft not found." });
+      }
+
+      const draftId = result.rows[0].id;
+      res.json({
+        ok: true,
+        draftId,
+        public: Boolean(result.rows[0].is_public),
+        publicUrl: getDraftPublicUrl({
+          draftId,
+          publicBaseUrl: config.publicBaseUrl,
+          requestBaseUrl: getRequestBaseUrl(req)
+        })
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/drafts/:draftId/disable", requireAuth, async (req, res, next) => {
     try {
       const reason = cleanText(req.body?.reason) || "Disabled by owner.";
@@ -457,10 +499,10 @@ async function renderDraft(req, res, { draftId, versionNumber }) {
     return res.status(404).type("html").send(renderNotFound());
   }
 
-  // Owner-only reads (MYHTMLS_PRIVATE_READS=1): the viewer must present a
-  // Bearer key or web session belonging to the draft's account. Browsers are
-  // bounced through sign-in and returned here; everything else gets 401.
-  if (config.privateReads) {
+  // Owner-only reads (MYHTMLS_PRIVATE_READS=1), unless the owner marked this
+  // draft public. Anyone with the link can then read it; other drafts stay
+  // gated on a Bearer key or a session for the owning account.
+  if (config.privateReads && !draft.is_public) {
     const viewerAccountId = await resolveViewerAccount(req);
     if (!viewerAccountId || viewerAccountId !== draft.account_id) {
       return denyPrivateDraft(req, res);
@@ -575,6 +617,13 @@ async function resolveViewerAccount(req) {
   const apiKey = await optionalAuth(req);
   if (apiKey) return apiKey.account_id;
   return readSession(req)?.accountId || null;
+}
+
+function parsePublicFlag(value) {
+  if (value === true || value === false) return value;
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  return null;
 }
 
 function denyPrivateDraft(req, res) {
