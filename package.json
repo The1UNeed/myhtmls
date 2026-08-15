@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/the1uneed/myhtmls"
+    "url": "git+https://github.com/the1uneed/myhtmls.git"
   },
   "files": [
     "bin/",
@@ -15,7 +15,7 @@
     "README.md"
   ],
   "bin": {
-    "myhtmls": "./bin/myhtmls.js"
+    "myhtmls": "bin/myhtmls.js"
   },
   "scripts": {
     "start": "node src/server.js",
