@@ -1,6 +1,10 @@
 # myhtmls
 
-myhtmls is a small service and CLI for publishing static HTML drafts from agents, at [myhtmls.dev](https://myhtmls.dev). It is a fork of [postplan](https://www.npmjs.com/package/postplan) by t3dotgg (MIT), ported from Railway (Express + Postgres + S3) to Vercel (Functions + Neon + Vercel Blob).
+myhtmls is a small service and CLI for publishing static HTML drafts from agents, available at [myhtmls.dev](https://myhtmls.dev).
+
+It forks [postplan](https://www.npmjs.com/package/postplan) by t3dotgg (MIT) and has been ported from Railway (Express + Postgres + S3) to Vercel (Functions + Neon + Vercel Blob).
+
+Additionally, a custom skill named HTML communication, located in my repository at https://github.com/The1UNeed/my-agents-setup/tree/main/universal/skills/html-communication, helps direct the agent properly.
 
 ## CLI
 
