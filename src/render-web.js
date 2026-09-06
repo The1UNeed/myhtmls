@@ -85,16 +85,18 @@ export function renderDraftDetail({ session, draft, versions }) {
         <p class="small"><a href="/dashboard">← My drafts</a></p>
         <h1>${escapeHtml(draft.title)}</h1>
         ${draft.description ? `<p class="muted">${escapeHtml(draft.description)}</p>` : ""}
-        <p>
-          ${
-            draft.isPublic
-              ? '<span class="pill">public</span> Anyone with the link can read this draft.'
-              : '<span class="pill warn">private</span> Owner-only while private reads are on.'
-          }
-        </p>
-        <form method="post" action="/dashboard/drafts/${escapeHtml(draft.draftId)}/visibility/${draft.isPublic ? "private" : "public"}">
-          <button class="button" type="submit">${draft.isPublic ? "Make private" : "Make public"}</button>
-        </form>
+        <p>${visibilityPill(draft.visibility)} ${VISIBILITY_LABELS[draft.visibility].help}</p>
+        <div class="row-actions">
+          ${Object.entries(VISIBILITY_LABELS)
+            .filter(([state]) => state !== draft.visibility)
+            .map(
+              ([state, { action }]) => `
+          <form method="post" action="/dashboard/drafts/${escapeHtml(draft.draftId)}/visibility/${state}">
+            <button class="button" type="submit">${action}</button>
+          </form>`
+            )
+            .join("")}
+        </div>
         <p><a href="${escapeHtml(draft.publicUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(draft.publicUrl)}</a></p>
         <table>
           <tr><th>Version</th><th>Commit</th><th>Ref</th><th>Published</th></tr>
@@ -172,6 +174,29 @@ export function renderCliAuthKey({ session, token, keyName }) {
   });
 }
 
+const VISIBILITY_LABELS = {
+  private: {
+    pill: "private",
+    action: "Make private",
+    help: "Only you can read this draft while private reads are on."
+  },
+  login: {
+    pill: "login required",
+    action: "Require login",
+    help: "Anyone signed in to myhtmls can read this draft."
+  },
+  public: {
+    pill: "public",
+    action: "Make public",
+    help: "Anyone with the link can read this draft."
+  }
+};
+
+function visibilityPill(visibility) {
+  const cls = visibility === "private" ? "pill warn" : "pill";
+  return `<span class="${cls}">${VISIBILITY_LABELS[visibility].pill}</span>`;
+}
+
 function renderDraftRow(draft) {
   // The title is the one-click "open the plan" action (new tab); the internal
   // detail/version-history screen hangs off the separate Details link.
@@ -180,7 +205,7 @@ function renderDraftRow(draft) {
       <div>
         <a class="row-title" href="${escapeHtml(draft.publicUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(draft.title)}</a>
         ${draft.disabled ? '<span class="pill warn">disabled</span>' : ""}
-        ${draft.isPublic ? '<span class="pill">public</span>' : ""}
+        ${draft.visibility === "private" ? "" : visibilityPill(draft.visibility)}
         ${draft.description ? `<div class="muted small">${escapeHtml(draft.description)}</div>` : ""}
       </div>
       <div class="row-meta muted small">
@@ -293,6 +318,7 @@ function webPage({ title, body, header = "" }) {
     .row-meta { white-space: nowrap; }
     .pill { font-size: 11px; border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
     .pill.warn { background: #fef3c7; color: #92400e; }
+    .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     table { width: 100%; border-collapse: collapse; margin-top: 14px; }
     th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
     th { color: #6b7280; font-weight: 600; font-size: 12px; text-transform: uppercase; }

@@ -4,7 +4,7 @@ import { newInternalId } from "./ids.js";
 import { clientIp } from "./client-ip.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { randomToken, sha256 } from "./crypto.js";
-import { getAccountDraftWithVersions, listAccountDrafts } from "./drafts.js";
+import { getAccountDraftWithVersions, listAccountDrafts, VISIBILITIES } from "./drafts.js";
 import { getDraftIdFromHost, getHomeUrl, getRequestBaseUrl, getRootHost } from "./public-url.js";
 import { buildAuthorizeUrl, buildPkce, exchangeCode, verifyIdToken } from "./shoo.js";
 import {
@@ -167,17 +167,16 @@ export function registerWebRoutes(app) {
       if (!session) {
         return res.type("html").send(renderSignIn({ next: "/dashboard" }));
       }
-      const isPublic = req.params.state === "public";
-      if (req.params.state !== "public" && req.params.state !== "private") {
+      if (!VISIBILITIES.includes(req.params.state)) {
         return next();
       }
       await pool.query(
         `
           UPDATE drafts
-          SET is_public = $3, updated_at = now()
+          SET visibility = $3, updated_at = now()
           WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
         `,
-        [req.params.draftId, session.accountId, isPublic]
+        [req.params.draftId, session.accountId, req.params.state]
       );
       res.redirect(`/dashboard/drafts/${encodeURIComponent(req.params.draftId)}`);
     } catch (error) {

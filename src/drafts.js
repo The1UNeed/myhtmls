@@ -5,6 +5,8 @@ import { getDraftPublicUrl, getDraftRawUrl } from "./public-url.js";
 // The "my docs" feed: every draft owned by an account, newest first, with the
 // aggregates a dashboard needs (latest version, version count, repo). Shared
 // by GET /api/drafts and the server-rendered dashboard.
+export const VISIBILITIES = ["private", "login", "public"];
+
 export async function listAccountDrafts(accountId, { requestBaseUrl }) {
   const result = await pool.query(
     `
@@ -18,7 +20,7 @@ export async function listAccountDrafts(accountId, { requestBaseUrl }) {
         d.created_at,
         d.updated_at,
         d.disabled_at,
-        d.is_public,
+        d.visibility,
         cv.version_number AS latest_version_number,
         cv.created_at AS latest_version_at,
         COALESCE(vc.version_count, 0) AS version_count
@@ -50,7 +52,7 @@ export async function listAccountDrafts(accountId, { requestBaseUrl }) {
     updatedAt: row.updated_at,
     latestVersionAt: row.latest_version_at,
     disabled: Boolean(row.disabled_at),
-    isPublic: Boolean(row.is_public),
+    visibility: row.visibility,
     publicUrl: getDraftPublicUrl({
       draftId: row.id,
       publicBaseUrl: config.publicBaseUrl,
@@ -93,7 +95,7 @@ export async function getAccountDraftWithVersions(accountId, draftId, { requestB
       draftId: draft.id,
       title: draft.title,
       description: draft.description,
-      isPublic: Boolean(draft.is_public),
+      visibility: draft.visibility,
       publicUrl: getDraftPublicUrl({
         draftId: draft.id,
         publicBaseUrl: config.publicBaseUrl,

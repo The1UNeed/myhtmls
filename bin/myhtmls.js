@@ -211,7 +211,7 @@ program
       const version = draft.latestVersionNumber ? `v${draft.latestVersionNumber}` : "no versions";
       const count = `${draft.versionCount} version${draft.versionCount === 1 ? "" : "s"}`;
       const disabled = draft.disabled ? " · disabled" : "";
-      const visibility = draft.isPublic ? " · public" : " · private";
+      const visibility = ` · ${draft.visibility === "login" ? "login required" : draft.visibility}`;
 
       console.log(draft.title || "Untitled Draft");
       console.log(`  ${repo} · ${version} · ${count} · updated ${timeAgo(draft.updatedAt)}${visibility}${disabled}`);
@@ -225,16 +225,19 @@ program
 
 program
   .command("visibility")
-  .description("Make a draft public (anyone with the link) or private (owner-only).")
+  .description("Set who can read a draft: public, login (any signed-in user), or private (owner-only).")
   .argument("[draft-or-file]", "Draft id or a local HTML file previously uploaded")
   .option("--public", "Anyone with the link can read")
+  .option("--login", "Any signed-in user can read")
   .option("--private", "Owner-only when private reads are enabled")
   .option("--draft <draft-id>", "Draft id (overrides the argument)")
   .option("--api-url <url>", "Override the default myhtmls API base URL")
   .action(async (draftOrFile, options) => {
-    if (Boolean(options.public) === Boolean(options.private)) {
-      throw new CliError("Pass exactly one of --public or --private.");
+    const chosen = ["public", "login", "private"].filter((state) => options[state]);
+    if (chosen.length !== 1) {
+      throw new CliError("Pass exactly one of --public, --login, or --private.");
     }
+    const visibility = chosen[0];
 
     const { apiUrl, apiKey } = readAuth(options.apiUrl);
     const draftId = resolveDraftId(options.draft || draftOrFile);
@@ -249,14 +252,15 @@ program
         "Content-Type": "application/json",
         "User-Agent": `myhtmls/${VERSION}`
       },
-      body: JSON.stringify({ public: Boolean(options.public) })
+      body: JSON.stringify({ visibility })
     });
     const body = await response.json();
     if (!response.ok) {
       throw new CliError(body.error || "Failed to update visibility.");
     }
 
-    console.log(body.public ? "Draft is public" : "Draft is private");
+    const labels = { public: "public", login: "public (login required)", private: "private" };
+    console.log(`Draft is ${labels[body.visibility] || body.visibility}`);
     console.log(`URL: ${body.publicUrl}`);
     console.log(`Draft ID: ${body.draftId}`);
   });

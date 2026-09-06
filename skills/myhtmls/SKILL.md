@@ -67,10 +67,11 @@ npx myhtmls upload <file path> --new
 
 Uploads require an API key (`myhtmls auth set <key>` once, stored in `~/.myhtmls`).
 
-To make a draft readable without sign-in (when the server has private reads on):
+When the server has private reads on, drafts are owner-only by default. To widen access:
 
 ```sh
-npx myhtmls visibility <file-or-draft-id> --public
+npx myhtmls visibility <file-or-draft-id> --public   # anyone with the link
+npx myhtmls visibility <file-or-draft-id> --login    # any signed-in user
 ```
 
 ## Viewer Behavior

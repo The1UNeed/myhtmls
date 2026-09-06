@@ -8,7 +8,7 @@ import { createRateLimiter } from "./rate-limit.js";
 import { getHtmlObject, putHtmlObject } from "./storage.js";
 import { validateHtml } from "./html-policy.js";
 import { clientIp } from "./client-ip.js";
-import { listAccountDrafts } from "./drafts.js";
+import { listAccountDrafts, VISIBILITIES } from "./drafts.js";
 import { registerWebRoutes } from "./web.js";
 import { readSession } from "./web-auth.js";
 import {
@@ -341,24 +341,24 @@ export function createApp() {
 
   app.post("/api/drafts/:draftId/visibility", requireAuth, async (req, res, next) => {
     try {
-      const isPublic = parsePublicFlag(req.body?.public);
-      if (isPublic === null) {
+      const visibility = parseVisibility(req.body);
+      if (!visibility) {
         return res.status(400).json({
           ok: false,
-          error: "Send { \"public\": true } or { \"public\": false }."
+          error: "Send { \"visibility\": \"public\" | \"login\" | \"private\" }."
         });
       }
 
       const result = await pool.query(
         `
           UPDATE drafts
-          SET is_public = $3, updated_at = now()
+          SET visibility = $3, updated_at = now()
           WHERE id = $1
             AND account_id = $2
             AND deleted_at IS NULL
-          RETURNING id, is_public
+          RETURNING id, visibility
         `,
-        [req.params.draftId, req.auth.account_id, isPublic]
+        [req.params.draftId, req.auth.account_id, visibility]
       );
 
       if (!result.rowCount) {
@@ -369,7 +369,7 @@ export function createApp() {
       res.json({
         ok: true,
         draftId,
-        public: Boolean(result.rows[0].is_public),
+        visibility: result.rows[0].visibility,
         publicUrl: getDraftPublicUrl({
           draftId,
           publicBaseUrl: config.publicBaseUrl,
@@ -499,13 +499,16 @@ async function renderDraft(req, res, { draftId, versionNumber }) {
     return res.status(404).type("html").send(renderNotFound());
   }
 
-  // Owner-only reads (MYHTMLS_PRIVATE_READS=1), unless the owner marked this
-  // draft public. Anyone with the link can then read it; other drafts stay
-  // gated on a Bearer key or a session for the owning account.
-  if (config.privateReads && !draft.is_public) {
+  // Gated reads (MYHTMLS_PRIVATE_READS=1) honour the draft's visibility:
+  //   public  — anyone with the link
+  //   login   — any signed-in viewer (Bearer key or web session)
+  //   private — only the owning account
+  if (config.privateReads && draft.visibility !== "public") {
     const viewerAccountId = await resolveViewerAccount(req);
-    if (!viewerAccountId || viewerAccountId !== draft.account_id) {
-      return denyPrivateDraft(req, res);
+    const allowed =
+      draft.visibility === "login" ? Boolean(viewerAccountId) : viewerAccountId === draft.account_id;
+    if (!allowed) {
+      return denyPrivateDraft(req, res, draft.visibility);
     }
   }
 
@@ -619,14 +622,16 @@ async function resolveViewerAccount(req) {
   return readSession(req)?.accountId || null;
 }
 
-function parsePublicFlag(value) {
-  if (value === true || value === false) return value;
-  if (value === "true" || value === "1") return true;
-  if (value === "false" || value === "0") return false;
+// Accepts { visibility } and, for older CLIs, { public: true | false }.
+function parseVisibility(body) {
+  if (VISIBILITIES.includes(body?.visibility)) return body.visibility;
+  const flag = body?.public;
+  if (flag === true || flag === "true" || flag === "1") return "public";
+  if (flag === false || flag === "false" || flag === "0") return "private";
   return null;
 }
 
-function denyPrivateDraft(req, res) {
+function denyPrivateDraft(req, res, visibility) {
   // curl and agent fetchers send Accept: */* — only an explicit text/html
   // (a real browser navigation) earns the sign-in redirect.
   const wantsHtml = (req.get("accept") || "").includes("text/html");
@@ -638,7 +643,10 @@ function denyPrivateDraft(req, res) {
   }
   res.status(401).json({
     ok: false,
-    error: "This draft is private. Send an Authorization: Bearer API key or sign in."
+    error:
+      visibility === "login"
+        ? "Sign in to view this draft. Send an Authorization: Bearer API key or sign in."
+        : "This draft is private. Send an Authorization: Bearer API key or sign in."
   });
 }
 
